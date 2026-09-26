@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A fast, mobile-friendly workout tracker with PR detection, rest timer, and progress charts.">
+<title>Iron Log</title>
+<style>
+  :root{
+    --bg:#F2F1EC;
+    --surface:#FFFFFF;
+    --surface-2:#EAE7DF;
+    --ink:#201C18;
+    --ink-soft:#625C53;
+    --ink-faint:#9C958A;
+    --line:#DEDAD1;
+    --line-strong:#C7C1B5;
+    --accent:#D3282C;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#F9DEDD;
+    --shadow: 0 1px 2px rgba(32,28,24,.06), 0 6px 18px rgba(32,28,24,.08);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17140F;
+      --surface:#211D18;
+      --surface-2:#2A251F;
+      --ink:#F1EEE7;
+      --ink-soft:#B7AFA1;
+      --ink-faint:#7C766A;
+      --line:#3A342C;
+      --line-strong:#4A4238;
+      --accent:#FF5A56;
+      --accent-ink:#FFFFFF;
+      --accent-soft:#3D211F;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 26px rgba(0,0,0,.4);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17140F;
+    --surface:#211D18;
+    --surface-2:#2A251F;
+    --ink:#F1EEE7;
+    --ink-soft:#B7AFA1;
+    --ink-faint:#7C766A;
+    --line:#3A342C;
+    --line-strong:#4A4238;
+    --accent:#FF5A56;
+    --accent-ink:#FFFFFF;
+    --accent-soft:#3D211F;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 26px rgba(0,0,0,.4);
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Work Sans", system-ui, sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    min-height:100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  img{ max-width:100%; }
+  button, input{ font-family:inherit; }
+  h1,h2,h3{ font-family:"Archivo", system-ui, sans-serif; text-wrap:balance; margin:0; }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+
+  .shell{ max-width:640px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; background:var(--surface); box-shadow: var(--shadow); }
+
+  .topbar{
+    position:sticky; top:env(safe-area-inset-top,0px); z-index:5;
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    padding:16px 18px 12px; padding-top:calc(16px + env(safe-area-inset-top,0px));
+    background:var(--surface); border-bottom:1px solid var(--line);
+  }
+  .wordmark{ font-weight:900; font-size:20px; letter-spacing:-.01em; }
+  .today-date{ font-size:12.5px; color:var(--ink-faint); }
+
+  main{ flex:1; padding:16px 18px calc(96px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:18px; }
+
+  .tabbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:6;
+    display:flex; justify-content:center;
+    background:var(--surface); border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .tabbar-inner{ max-width:640px; width:100%; display:grid; grid-template-columns:repeat(4,1fr); }
+  .tab-btn{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:10px 4px 8px; border:none; background:none; color:var(--ink-faint);
+    font-size:11px; font-weight:600; cursor:pointer; min-height:56px; min-width:0;
+  }
+  .tab-btn svg{ display:block; }
+  .tab-btn[aria-current="true"]{ color:var(--accent); }
+
+  .stat-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .stat-tile{
+    background:var(--surface-2); border-radius:10px; padding:12px 10px;
+    display:flex; flex-direction:column; gap:4px; min-width:0;
+  }
+  .stat-tile .label{ font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; }
+  .stat-tile .value{ font-family:"Archivo", system-ui, sans-serif; font-weight:800; font-size:19px; }
+
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .card-title{ font-size:13px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; }
+
+  .field-row{ display:flex; flex-direction:column; gap:6px; position:relative; min-width:0; }
+  .field-row label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .text-input{
+    width:100%; padding:11px 12px; border-radius:8px; border:1px solid var(--line-strong);
+    background:var(--surface); color:var(--ink); font-size:15px;
+  }
+  .text-input:focus{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  .suggest-list{
+    position:absolute; top:100%; left:0; right:0; margin-top:4px; z-index:4;
+    background:var(--surface); border:1px solid var(--line-strong); border-radius:10px;
+    box-shadow:var(--shadow); max-height:220px; overflow-y:auto; padding:4px;
+  }
+  .suggest-item{
+    padding:10px 10px; border-radius:6px; cursor:pointer; font-size:14px; display:flex; justify-content:space-between; gap:8px;
+  }
+  .suggest-item:hover, .suggest-item.active{ background:var(--surface-2); }
+  .suggest-item .hint{ color:var(--ink-faint); font-size:11.5px; }
+
+  .stepper-row{ display:grid; grid-template-columns:1fr; gap:12px; }
+  .stepper{ display:flex; align-items:stretch; border:1px solid var(--line-strong); border-radius:8px; overflow:hidden; min-width:0; }
+  .stepper button{
+    width:42px; border:none; background:var(--surface-2); color:var(--ink); font-size:18px; font-weight:700; cursor:pointer;
+  }
+  .stepper button:active{ background:var(--line); }
+  .stepper input{
+    flex:1; min-width:0; border:none; text-align:center; font-size:17px; font-weight:600; background:var(--surface); color:var(--ink);
+    font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums;
+  }
+  .stepper input:focus{ outline:none; }
+  .stepper-unit{ display:flex; align-items:center; padding:0 10px; background:var(--surface-2); color:var(--ink-faint); font-size:12px; font-weight:600; }
+  @media (min-width:600px){
+    .stepper-row{ grid-template-columns:1fr 1fr; }
+  }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:12px 16px; border-radius:9px; border:1px solid var(--line-strong);
+    background:var(--surface); color:var(--ink); font-size:14.5px; font-weight:600; cursor:pointer;
+    min-height:46px;
+  }
+  .btn-block{ width:100%; }
+  .btn-primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn-primary:active{ filter:brightness(.95); }
+  .btn-ghost{ background:transparent; border-color:transparent; color:var(--ink-soft); padding:10px 12px; min-height:auto; }
+  .btn-danger-outline{ background:transparent; border-color:var(--accent); color:var(--accent); }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{
+    padding:7px 12px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface-2);
+    color:var(--ink-soft); font-size:12.5px; font-weight:600; cursor:pointer;
+  }
+  .chip[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+
+  .timer-card{ display:flex; flex-direction:column; gap:10px; align-items:center; text-align:center; }
+  .timer-display{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; font-size:40px; font-weight:600; letter-spacing:.02em; }
+  .timer-actions{ display:flex; gap:10px; width:100%; }
+  .timer-actions .btn{ flex:1; }
+
+  .exercise-group{ border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .exercise-group-head{
+    display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 14px;
+    background:var(--surface-2); font-weight:700; font-size:13.5px;
+  }
+  .exercise-group-head .count{ font-size:11.5px; color:var(--ink-faint); font-weight:500; }
+  .set-list{ display:flex; flex-direction:column; }
+  .set-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 14px; border-top:1px solid var(--line);
+  }
+  .set-row .set-figures{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; font-size:14.5px; font-weight:600; display:flex; align-items:center; gap:8px; }
+  .pr-badge{
+    display:inline-flex; align-items:center; gap:3px; padding:2px 7px; border-radius:999px;
+    background:var(--accent-soft); color:var(--accent); font-size:10px; font-weight:800; letter-spacing:.03em;
+  }
+  .pr-badge svg{ width:10px; height:10px; }
+  .set-row .remove-btn{ color:var(--ink-faint); background:none; border:none; padding:4px; cursor:pointer; }
+  .set-row .remove-btn:hover{ color:var(--accent); }
+
+  .empty-state{ text-align:center; padding:36px 16px; color:var(--ink-faint); display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .empty-state svg{ color:var(--line-strong); }
+  .empty-state strong{ color:var(--ink); font-size:15px; }
+
+  .week-strip{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .week-cell{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0; }
+  .week-cell .dow{ font-size:9.5px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; }
+  .week-cell .box{ width:100%; aspect-ratio:1/1; border-radius:6px; border:1px solid var(--line); }
+  .week-cell.today .box{ box-shadow: 0 0 0 2px var(--accent); }
+
+  .history-day{ border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .history-day-head{
+    width:100%; display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:12px 14px; background:none; border:none; text-align:left; cursor:pointer; color:var(--ink);
+  }
+  .history-day-head .date{ font-weight:700; font-size:14px; }
+  .history-day-head .summary{ font-size:12px; color:var(--ink-faint); }
+  .history-day-head .vol{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; font-size:13px; color:var(--ink-soft); white-space:nowrap; }
+  .history-day-body{ border-top:1px solid var(--line); padding:4px 14px 10px; }
+
+  .segmented{ display:flex; border:1px solid var(--line-strong); border-radius:9px; overflow:hidden; }
+  .segmented button{ flex:1; padding:10px 8px; border:none; background:var(--surface-2); color:var(--ink-soft); font-size:13px; font-weight:600; cursor:pointer; border-right:1px solid var(--line-strong); }
+  .segmented button:last-child{ border-right:none; }
+  .segmented button[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); }
+
+  .chart-wrap{ position:relative; }
+  .chart-tooltip{
+    position:absolute; pointer-events:none; background:var(--ink); color:var(--bg);
+    padding:6px 9px; border-radius:7px; font-size:11.5px; line-height:1.4; white-space:nowrap;
+    transform:translate(-50%,-115%); opacity:0; transition:opacity .1s; z-index:3;
+  }
+  .chart-tooltip.show{ opacity:1; }
+  .chart-tooltip .tt-val{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-weight:700; }
+
+  .settings-section{ display:flex; flex-direction:column; gap:10px; }
+  .settings-note{ font-size:12px; color:var(--ink-faint); line-height:1.5; }
+  .danger-zone{ border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:8px; }
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(8px);
+    background:var(--ink); color:var(--bg); padding:9px 16px; border-radius:999px; font-size:13px; font-weight:600;
+    opacity:0; pointer-events:none; transition:opacity .15s, transform .15s; z-index:9; max-width:88%; text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+
+
+</head>
+<body>
+<div class="shell" id="app">
+  <header class="topbar">
+    <span class="wordmark">Iron Log</span>
+    <span class="today-date" id="topDate"></span>
+  </header>
+
+  <main id="views">
+    <section id="view-log"></section>
+    <section id="view-history" hidden></section>
+    <section id="view-progress" hidden></section>
+    <section id="view-settings" hidden></section>
+  </main>
+
+  <nav class="tabbar">
+    <div class="tabbar-inner">
+      <button class="tab-btn" type="button" data-tab="log" aria-current="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11M4 9l3-3 3 3-3 3-3-3zm11 11l3-3 3 3-3 3-3-3zM2 12h2m16 0h2M9 4V2m0 20v-2"/></svg>
+        Log
+      </button>
+      <button class="tab-btn" type="button" data-tab="history" aria-current="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        History
+      </button>
+      <button class="tab-btn" type="button" data-tab="progress" aria-current="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-9"/><path d="M15 7h5v5"/></svg>
+        Progress
+      </button>
+      <button class="tab-btn" type="button" data-tab="settings" aria-current="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+        Settings
+      </button>
+    </div>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- storage ---------- */
+  var STORE_KEY = "ironlog.v1";
+  var SEED_EXERCISES = ["Bench Press","Incline Bench Press","Squat","Deadlift","Overhead Press","Barbell Row","Pull-Up","Lat Pulldown","Bicep Curl","Tricep Pushdown","Leg Press","Romanian Deadlift","Hip Thrust","Dumbbell Shoulder Press","Lunge"];
+
+  function defaultData(){
+    return { sets: [], bodyweight: [], exercises: SEED_EXERCISES.slice(), settings: { unit: "kg" } };
+  }
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return defaultData();
+      var parsed = JSON.parse(raw);
+      if(!parsed || typeof parsed !== "object") return defaultData();
+      parsed.sets = Array.isArray(parsed.sets) ? parsed.sets : [];
+      parsed.bodyweight = Array.isArray(parsed.bodyweight) ? parsed.bodyweight : [];
+      parsed.exercises = Array.isArray(parsed.exercises) && parsed.exercises.length ? parsed.exercises : SEED_EXERCISES.slice();
+      parsed.settings = parsed.settings && typeof parsed.settings === "object" ? parsed.settings : { unit: "kg" };
+      if(parsed.settings.unit !== "lb") parsed.settings.unit = "kg";
+      return parsed;
+    } catch(e){ return defaultData(); }
+  }
+
+  function save(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e){ /* storage unavailable; app still works in-memory */ }
+  }
+
+  var state = load();
+  var ui = { tab: "log", timer: { total: 90, remaining: 90, running: false, intervalId: null }, progressMode: "exercises", progressExercise: null, historyOpen: {} };
+
+  /* ---------- helpers ---------- */
+  function $(sel, el){ return (el||document).querySelector(sel); }
+  function $all(sel, el){ return Array.prototype.slice.call((el||document).querySelectorAll(sel)); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]; });
+  }
+  function todayStr(){ return dateToStr(new Date()); }
+  function dateToStr(d){
+    var y=d.getFullYear(), m=("0"+(d.getMonth()+1)).slice(-2), day=("0"+d.getDate()).slice(-2);
+    return y+"-"+m+"-"+day;
+  }
+  function niceDate(dateStr, opts){
+    var d = new Date(dateStr+"T00:00:00");
+    var wk = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
+    var mo = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+    if(opts === "short") return mo+" "+d.getDate();
+    return wk+", "+mo+" "+d.getDate();
+  }
+  function epley1RM(weight, reps){ return weight * (1 + reps/30); }
+  function fmtNum(n){
+    if(Math.round(n*10)/10 === Math.round(n)) return String(Math.round(n));
+    return (Math.round(n*10)/10).toFixed(1);
+  }
+  function unit(){ return state.settings.unit; }
+  function toast(msg){
+    var t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._tm);
+    toast._tm = setTimeout(function(){ t.classList.remove("show"); }, 2200);
+  }
+
+  function bestSet(exercise, excludeId){
+    var best = null;
+    state.sets.forEach(function(s){
+      if(s.exercise !== exercise || s.id === excludeId) return;
+      if(!best || s.weight > best.weight || (s.weight === best.weight && s.reps > best.reps)) best = s;
+    });
+    return best;
+  }
+  function isNewPR(set){
+    var prev = bestSet(set.exercise, set.id);
+    if(!prev) return true;
+    return set.weight > prev.weight || (set.weight === prev.weight && set.reps > prev.reps);
+  }
+  function volumeOf(sets){ return sets.reduce(function(sum,s){ return sum + s.weight*s.reps; }, 0); }
+  function setsForDate(dateStr){ return state.sets.filter(function(s){ return s.date === dateStr; }); }
+  function recentExercises(limit){
+    var seen = {}, order = [];
+    for(var i=state.sets.length-1; i>=0; i--){
+      var ex = state.sets[i].exercise;
+      if(!seen[ex]){ seen[ex]=true; order.push(ex); }
+      if(order.length >= limit) break;
+    }
+    return order;
+  }
+  function exerciseList(query){
+    var recents = recentExercises(state.exercises.length);
+    var rest = state.exercises.filter(function(e){ return recents.indexOf(e) === -1; });
+    var all = recents.concat(rest);
+    if(!query) return all;
+    var q = query.toLowerCase();
+    return all.filter(function(e){ return e.toLowerCase().indexOf(q) !== -1; });
+  }
+
+  /* ---------- icons ---------- */
+  var icon = {
+    trophy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a1 1 0 00-1 1v1H6a1 1 0 00-1 1v2a4 4 0 004 4c.3.9.9 1.6 1.7 2.1L10 15H8a1 1 0 000 2h8a1 1 0 000-2h-2l-.7-2.9c.8-.5 1.4-1.2 1.7-2.1a4 4 0 004-4V5a1 1 0 00-1-1h-5V3a1 1 0 00-1-1zM7 6h4v1a3 3 0 01-2 2.8A2 2 0 017 8V6zm10 0v2a2 2 0 01-2 2.8A3 3 0 0113 7V6h4zM8 19a1 1 0 000 2h8a1 1 0 000-2H8z"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="15" height="15"><path d="M5 5l14 14M19 5L5 19"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M9 6l6 6-6 6"/></svg>',
+    dumbbell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11M4 9l3-3 3 3-3 3-3-3zm11 11l3-3 3 3-3 3-3-3zM2 12h2m16 0h2"/></svg>'
+  };
+
+  /* ---------- tabs ---------- */
+  function setTab(tab){
+    ui.tab = tab;
+    ["log","history","progress","settings"].forEach(function(t){
+      $("#view-"+t).hidden = (t !== tab);
+    });
+    $all(".tab-btn").forEach(function(b){ b.setAttribute("aria-current", b.dataset.tab === tab ? "true" : "false"); });
+    if(tab === "log") renderLog();
+    if(tab === "history") renderHistory();
+    if(tab === "progress") renderProgress();
+    if(tab === "settings") renderSettings();
+  }
+  $all(".tab-btn").forEach(function(b){ b.addEventListener("click", function(){ setTab(b.dataset.tab); }); });
+
+  $("#topDate").textContent = niceDate(todayStr());
+
+  /* ================= LOG TAB ================= */
+  var logDraft = { exercise: "", weight: 20, reps: 8 };
+
+  function renderLog(){
+    var todaySets = setsForDate(todayStr());
+    var vol = volumeOf(todaySets);
+    var prCount = todaySets.filter(isNewPRAtLogTime).length;
+
+    var groups = {};
+    var order = [];
+    todaySets.forEach(function(s){
+      if(!groups[s.exercise]){ groups[s.exercise] = []; order.push(s.exercise); }
+      groups[s.exercise].push(s);
+    });
+
+    var html = '';
+    html += '<div class="stat-row">' +
+      '<div class="stat-tile"><span class="label">Sets today</span><span class="value mono">'+todaySets.length+'</span></div>' +
+      '<div class="stat-tile"><span class="label">Volume</span><span class="value mono">'+fmtNum(vol)+'</span></div>' +
+      '<div class="stat-tile"><span class="label">PRs today</span><span class="value mono">'+prCount+'</span></div>' +
+      '</div>';
+
+    html += '<div class="card">' +
+      '<span class="card-title">Log a set</span>' +
+      '<div class="field-row" id="exerciseFieldRow">' +
+        '<label for="exerciseInput">Exercise</label>' +
+        '<input class="text-input" id="exerciseInput" type="text" autocomplete="off" placeholder="Search or add an exercise" value="'+escapeHtml(logDraft.exercise)+'">' +
+        '<div class="suggest-list" id="exerciseSuggest" hidden></div>' +
+      '</div>' +
+      '<div class="stepper-row">' +
+        '<div class="field-row">' +
+          '<label>Weight</label>' +
+          '<div class="stepper">' +
+            '<button type="button" data-adj="weight" data-delta="-'+stepFor("weight")+'">−</button>' +
+            '<input id="weightInput" inputmode="decimal" value="'+fmtNum(logDraft.weight)+'">' +
+            '<span class="stepper-unit">'+unit()+'</span>' +
+            '<button type="button" data-adj="weight" data-delta="'+stepFor("weight")+'">+</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="field-row">' +
+          '<label>Reps</label>' +
+          '<div class="stepper">' +
+            '<button type="button" data-adj="reps" data-delta="-1">−</button>' +
+            '<input id="repsInput" inputmode="numeric" value="'+logDraft.reps+'">' +
+            '<button type="button" data-adj="reps" data-delta="1">+</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn btn-primary btn-block" id="logSetBtn" type="button">Log set</button>' +
+      '</div>';
+
+    html += '<div class="card timer-card" id="timerCard">' +
+      '<span class="card-title">Rest timer</span>' +
+      '<div class="timer-display mono" id="timerDisplay">'+fmtTime(ui.timer.remaining)+'</div>' +
+      '<div class="chip-row" id="timerPresets">' +
+        [60,90,120,180].map(function(s){ return '<button class="chip" type="button" data-preset="'+s+'" aria-pressed="'+(ui.timer.total===s?'true':'false')+'">'+s+'s</button>'; }).join('') +
+      '</div>' +
+      '<div class="timer-actions">' +
+        '<button class="btn" id="timerToggleBtn" type="button">'+(ui.timer.running?'Pause':'Start')+'</button>' +
+        '<button class="btn btn-ghost" id="timerResetBtn" type="button">Reset</button>' +
+      '</div>' +
+      '</div>';
+
+    if(!order.length){
+      html += '<div class="empty-state">' + icon.dumbbell.replace('<svg ', '<svg width="34" height="34" ') +
+        '<strong>No sets logged yet today</strong><span>Add your first set above to start today’s session.</span></div>';
+    } else {
+      order.forEach(function(ex){
+        var sets = groups[ex];
+        html += '<div class="exercise-group">' +
+          '<div class="exercise-group-head"><span>'+escapeHtml(ex)+'</span><span class="count">'+sets.length+' set'+(sets.length===1?'':'s')+'</span></div>' +
+          '<div class="set-list">' +
+          sets.map(function(s){
+            return '<div class="set-row" data-id="'+s.id+'">' +
+              '<span class="set-figures">'+fmtNum(s.weight)+' '+s.unit+' × '+s.reps+
+                (s.pr ? ' <span class="pr-badge">'+icon.trophy+' PR</span>' : '') + '</span>' +
+              '<button class="remove-btn" type="button" data-remove="'+s.id+'" aria-label="Delete set">'+icon.close+'</button>' +
+              '</div>';
+          }).join('') +
+          '</div></div>';
+      });
+    }
+
+    $("#view-log").innerHTML = html;
+    wireLogView();
+  }
+
+  function isNewPRAtLogTime(s){ return !!s.pr; }
+  function stepFor(field){ return field === "weight" ? (unit()==="kg" ? 2.5 : 5) : 1; }
+
+  function fmtTime(sec){
+    sec = Math.max(0, Math.round(sec));
+    var m = Math.floor(sec/60), s = sec%60;
+    return ("0"+m).slice(-2)+":"+("0"+s).slice(-2);
+  }
+
+  function wireLogView(){
+    var exInput = $("#exerciseInput");
+    var suggest = $("#exerciseSuggest");
+
+    function openSuggest(query){
+      var list = exerciseList(query).slice(0, 8);
+      var hasExact = state.exercises.some(function(e){ return e.toLowerCase() === (query||"").trim().toLowerCase(); });
+      var html = list.map(function(e){ return '<div class="suggest-item" data-pick="'+escapeHtml(e)+'">'+escapeHtml(e)+'</div>'; }).join('');
+      if(query && query.trim() && !hasExact){
+        html += '<div class="suggest-item" data-pick-new="'+escapeHtml(query.trim())+'"><span>Add “'+escapeHtml(query.trim())+'”</span><span class="hint">new</span></div>';
+      }
+      if(!html){ suggest.hidden = true; return; }
+      suggest.innerHTML = html;
+      suggest.hidden = false;
+    }
+    exInput.addEventListener("focus", function(){ openSuggest(exInput.value); });
+    exInput.addEventListener("input", function(){ logDraft.exercise = exInput.value; openSuggest(exInput.value); });
+    exInput.addEventListener("blur", function(){ setTimeout(function(){ suggest.hidden = true; }, 150); });
+    suggest.addEventListener("mousedown", function(ev){
+      var pick = ev.target.closest("[data-pick]");
+      var pickNew = ev.target.closest("[data-pick-new]");
+      if(pick){ logDraft.exercise = pick.getAttribute("data-pick"); exInput.value = logDraft.exercise; suggest.hidden = true; }
+      else if(pickNew){
+        var name = pickNew.getAttribute("data-pick-new");
+        if(state.exercises.indexOf(name) === -1) state.exercises.push(name);
+        logDraft.exercise = name; exInput.value = name; suggest.hidden = true; save();
+      }
+    });
+
+    $all("[data-adj]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var field = btn.getAttribute("data-adj");
+        var delta = parseFloat(btn.getAttribute("data-delta"));
+        if(field === "weight"){
+          logDraft.weight = Math.max(0, Math.round((logDraft.weight + delta)*10)/10);
+          $("#weightInput").value = fmtNum(logDraft.weight);
+        } else {
+          logDraft.reps = Math.max(1, logDraft.reps + delta);
+          $("#repsInput").value = logDraft.reps;
+        }
+      });
+    });
+    $("#weightInput").addEventListener("change", function(){
+      var v = parseFloat($("#weightInput").value);
+      logDraft.weight = isNaN(v) ? 0 : Math.max(0, v);
+      $("#weightInput").value = fmtNum(logDraft.weight);
+    });
+    $("#repsInput").addEventListener("change", function(){
+      var v = parseInt($("#repsInput").value, 10);
+      logDraft.reps = isNaN(v) ? 1 : Math.max(1, v);
+      $("#repsInput").value = logDraft.reps;
+    });
+
+    $("#logSetBtn").addEventListener("click", function(){
+      var name = (logDraft.exercise || exInput.value || "").trim();
+      if(!name){ toast("Pick or type an exercise first"); exInput.focus(); return; }
+      if(state.exercises.indexOf(name) === -1) state.exercises.push(name);
+      var candidate = { exercise: name, weight: logDraft.weight, reps: logDraft.reps };
+      var pr = isNewPR(candidate);
+      var set = { id: uid(), date: todayStr(), ts: Date.now(), exercise: name, weight: logDraft.weight, reps: logDraft.reps, unit: unit(), pr: pr };
+      state.sets.push(set);
+      save();
+      renderLog();
+      toast(pr ? "New PR — nice work" : "Set logged");
+      startTimer();
+    });
+
+    $all("[data-remove]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var id = btn.getAttribute("data-remove");
+        state.sets = state.sets.filter(function(s){ return s.id !== id; });
+        save();
+        renderLog();
+      });
+    });
+
+    $all("[data-preset]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var v = parseInt(btn.getAttribute("data-preset"), 10);
+        ui.timer.total = v; ui.timer.remaining = v; ui.timer.running = false;
+        clearInterval(ui.timer.intervalId);
+        renderLog();
+      });
+    });
+    $("#timerToggleBtn").addEventListener("click", function(){ ui.timer.running ? pauseTimer() : startTimer(); });
+    $("#timerResetBtn").addEventListener("click", function(){
+      clearInterval(ui.timer.intervalId);
+      ui.timer.running = false; ui.timer.remaining = ui.timer.total;
+      renderLog();
+    });
+  }
+
+  function startTimer(){
+    clearInterval(ui.timer.intervalId);
+    if(ui.timer.remaining <= 0) ui.timer.remaining = ui.timer.total;
+    ui.timer.running = true;
+    var btn = $("#timerToggleBtn"); if(btn) btn.textContent = "Pause";
+    ui.timer.intervalId = setInterval(function(){
+      ui.timer.remaining -= 1;
+      var disp = $("#timerDisplay");
+      if(disp) disp.textContent = fmtTime(ui.timer.remaining);
+      if(ui.timer.remaining <= 0){
+        clearInterval(ui.timer.intervalId);
+        ui.timer.running = false;
+        ui.timer.remaining = 0;
+        beep();
+        if(btn) btn.textContent = "Start";
+        toast("Rest over — go again");
+      }
+    }, 1000);
+  }
+  function pauseTimer(){
+    clearInterval(ui.timer.intervalId);
+    ui.timer.running = false;
+    var btn = $("#timerToggleBtn"); if(btn) btn.textContent = "Start";
+  }
+  function beep(){
+    try{
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      var ctx = new Ctx();
+      [0, 0.18].forEach(function(t){
+        var osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.frequency.value = 880; osc.type = "sine";
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.16);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.18);
+      });
+    } catch(e){ /* audio unavailable */ }
+  }
+
+  /* ================= HISTORY TAB ================= */
+  function renderHistory(){
+    var days = {};
+    state.sets.forEach(function(s){ (days[s.date] = days[s.date] || []).push(s); });
+    var dateKeys = Object.keys(days).sort().reverse();
+
+    var strip = [];
+    for(var i=13; i>=0; i--){
+      var d = new Date(); d.setDate(d.getDate()-i);
+      var ds = dateToStr(d);
+      var count = (days[ds] || []).length;
+      strip.push({ date: ds, count: count, dow: ["S","M","T","W","T","F","S"][d.getDay()], isToday: ds===todayStr() });
+    }
+    var maxC = Math.max(1, Math.max.apply(null, strip.map(function(c){ return c.count; })));
+
+    var html = '<div class="card">' +
+      '<span class="card-title">Last 14 days</span>' +
+      '<div class="week-strip">' +
+      strip.map(function(c){
+        var op = c.count === 0 ? 0 : clamp(0.25 + (c.count/maxC)*0.65, 0.25, 0.9);
+        var bg = c.count === 0 ? "var(--surface-2)" : "color-mix(in srgb, var(--accent) "+Math.round(op*100)+"%, var(--surface))";
+        return '<div class="week-cell'+(c.isToday?' today':'')+'"><span class="dow">'+c.dow+'</span><div class="box" style="background:'+bg+'" title="'+c.date+': '+c.count+' set(s)"></div></div>';
+      }).join('') +
+      '</div></div>';
+
+    if(!dateKeys.length){
+      html += '<div class="empty-state">' + icon.dumbbell.replace('<svg ', '<svg width="34" height="34" ') +
+        '<strong>No history yet</strong><span>Days you log sets will show up here.</span></div>';
+    } else {
+      dateKeys.forEach(function(ds){
+        var sets = days[ds];
+        var names = [];
+        sets.forEach(function(s){ if(names.indexOf(s.exercise)===-1) names.push(s.exercise); });
+        var summary = names.slice(0,2).join(", ") + (names.length>2 ? " +"+(names.length-2)+" more" : "");
+        var open = !!ui.historyOpen[ds];
+        html += '<div class="history-day">' +
+          '<button class="history-day-head" type="button" data-day="'+ds+'">' +
+            '<span><span class="date">'+niceDate(ds)+'</span><br><span class="summary">'+escapeHtml(summary)+'</span></span>' +
+            '<span class="vol">'+fmtNum(volumeOf(sets))+' '+sets[0].unit+'</span>' +
+          '</button>' +
+          '<div class="history-day-body" '+(open?'':'hidden')+' data-day-body="'+ds+'">' +
+          sets.slice().sort(function(a,b){return a.ts-b.ts;}).map(function(s){
+            return '<div class="set-row"><span class="set-figures">'+escapeHtml(s.exercise)+' — '+fmtNum(s.weight)+' '+s.unit+' × '+s.reps+
+              (s.pr?' <span class="pr-badge">'+icon.trophy+' PR</span>':'')+'</span>' +
+              '<button class="remove-btn" type="button" data-remove-hist="'+s.id+'" aria-label="Delete set">'+icon.close+'</button></div>';
+          }).join('') +
+          '</div></div>';
+      });
+    }
+
+    $("#view-history").innerHTML = html;
+    $all("[data-day]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var ds = btn.getAttribute("data-day");
+        ui.historyOpen[ds] = !ui.historyOpen[ds];
+        renderHistory();
+      });
+    });
+    $all("[data-remove-hist]").forEach(function(btn){
+      btn.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        var id = btn.getAttribute("data-remove-hist");
+        state.sets = state.sets.filter(function(s){ return s.id !== id; });
+        save();
+        renderHistory();
+      });
+    });
+  }
+
+  /* ================= PROGRESS TAB ================= */
+  function exercisesWithData(){
+    var set = {};
+    state.sets.forEach(function(s){ set[s.exercise] = true; });
+    return Object.keys(set).sort();
+  }
+
+  function renderProgress(){
+    var html = '<div class="segmented">' +
+      '<button type="button" data-pmode="exercises" aria-pressed="'+(ui.progressMode==="exercises")+'">Exercises</button>' +
+      '<button type="button" data-pmode="bodyweight" aria-pressed="'+(ui.progressMode==="bodyweight")+'">Body weight</button>' +
+      '</div>';
+
+    if(ui.progressMode === "exercises"){
+      var list = exercisesWithData();
+      if(!list.length){
+        html += '<div class="empty-state">'+icon.dumbbell.replace('<svg ', '<svg width="34" height="34" ')+
+          '<strong>Nothing to chart yet</strong><span>Log a few sets and your progress shows up here.</span></div>';
+      } else {
+        if(!ui.progressExercise || list.indexOf(ui.progressExercise) === -1) ui.progressExercise = list[0];
+        html += '<div class="field-row"><label for="progressExerciseSel">Exercise</label>' +
+          '<select class="text-input" id="progressExerciseSel">' +
+          list.map(function(e){ return '<option value="'+escapeHtml(e)+'"'+(e===ui.progressExercise?' selected':'')+'>'+escapeHtml(e)+'</option>'; }).join('') +
+          '</select></div>';
+
+        var sets = state.sets.filter(function(s){ return s.exercise === ui.progressExercise; }).sort(function(a,b){ return a.ts-b.ts; });
+        var best = bestSet(ui.progressExercise);
+        var last = sets[sets.length-1];
+        var est1RM = best ? epley1RM(best.weight, best.reps) : 0;
+
+        html += '<div class="stat-row">' +
+          '<div class="stat-tile"><span class="label">Best set</span><span class="value mono">'+(best?fmtNum(best.weight)+' '+best.unit:'—')+'</span></div>' +
+          '<div class="stat-tile"><span class="label">Est. 1RM</span><span class="value mono">'+(best?fmtNum(est1RM):'—')+'</span></div>' +
+          '<div class="stat-tile"><span class="label">Sessions</span><span class="value mono">'+uniqueDays(sets)+'</span></div>' +
+          '</div>';
+
+        html += '<div class="card"><span class="card-title">Top set by session</span><div class="chart-wrap" id="exChartWrap"></div></div>';
+      }
+    } else {
+      var bw = state.bodyweight.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+      html += '<div class="card">' +
+        '<span class="card-title">Log body weight</span>' +
+        '<div class="stepper-row" style="grid-template-columns:1fr;">' +
+          '<div class="field-row"><label>Weight</label><div class="stepper">' +
+            '<button type="button" data-bwadj="-'+(unit()==="kg"?0.5:1)+'">−</button>' +
+            '<input id="bwInput" inputmode="decimal" value="'+(bw.length?fmtNum(bw[bw.length-1].weight):"")+'" placeholder="0">' +
+            '<span class="stepper-unit">'+unit()+'</span>' +
+            '<button type="button" data-bwadj="'+(unit()==="kg"?0.5:1)+'">+</button>' +
+          '</div></div>' +
+        '</div>' +
+        '<button class="btn btn-primary btn-block" id="logBwBtn" type="button">Log today’s weight</button>' +
+        '</div>';
+
+      if(bw.length){
+        var first = bw[0], latest = bw[bw.length-1];
+        html += '<div class="stat-row">' +
+          '<div class="stat-tile"><span class="label">Current</span><span class="value mono">'+fmtNum(latest.weight)+'</span></div>' +
+          '<div class="stat-tile"><span class="label">Since start</span><span class="value mono">'+(latest.weight-first.weight>=0?'+':'')+fmtNum(latest.weight-first.weight)+'</span></div>' +
+          '<div class="stat-tile"><span class="label">Entries</span><span class="value mono">'+bw.length+'</span></div>' +
+          '</div>';
+        html += '<div class="card"><span class="card-title">Body weight over time</span><div class="chart-wrap" id="bwChartWrap"></div></div>';
+      } else {
+        html += '<div class="empty-state">'+icon.dumbbell.replace('<svg ', '<svg width="34" height="34" ')+
+          '<strong>No entries yet</strong><span>Log your weight above to start a trend line.</span></div>';
+      }
+    }
+
+    $("#view-progress").innerHTML = html;
+    wireProgressView();
+  }
+
+  function uniqueDays(sets){
+    var seen = {}; sets.forEach(function(s){ seen[s.date]=true; });
+    return Object.keys(seen).length;
+  }
+
+  function wireProgressView(){
+    $all("[data-pmode]").forEach(function(btn){
+      btn.addEventListener("click", function(){ ui.progressMode = btn.getAttribute("data-pmode"); renderProgress(); });
+    });
+    var sel = $("#progressExerciseSel");
+    if(sel){
+      sel.addEventListener("change", function(){ ui.progressExercise = sel.value; renderProgress(); });
+      var sets = state.sets.filter(function(s){ return s.exercise === ui.progressExercise; }).sort(function(a,b){ return a.ts-b.ts; });
+      var byDay = {};
+      sets.forEach(function(s){
+        if(!byDay[s.date] || s.weight > byDay[s.date].weight) byDay[s.date] = s;
+      });
+      var points = Object.keys(byDay).sort().map(function(d){ var s=byDay[d]; return { date: d, value: s.weight, reps: s.reps, unit: s.unit, pr: s.pr }; });
+      var wrap = $("#exChartWrap");
+      if(wrap) renderLineChart(wrap, points, unit());
+    }
+    var bwAdjBtns = $all("[data-bwadj]");
+    bwAdjBtns.forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var inp = $("#bwInput");
+        var v = parseFloat(inp.value) || 0;
+        var delta = parseFloat(btn.getAttribute("data-bwadj"));
+        inp.value = fmtNum(Math.max(0, v + delta));
+      });
+    });
+    var logBw = $("#logBwBtn");
+    if(logBw){
+      logBw.addEventListener("click", function(){
+        var v = parseFloat($("#bwInput").value);
+        if(isNaN(v) || v <= 0){ toast("Enter a weight first"); return; }
+        var ds = todayStr();
+        var existing = state.bodyweight.find(function(b){ return b.date === ds; });
+        if(existing){ existing.weight = v; existing.unit = unit(); }
+        else state.bodyweight.push({ id: uid(), date: ds, weight: v, unit: unit() });
+        save();
+        toast("Body weight logged");
+        renderProgress();
+      });
+    }
+    var bw = state.bodyweight.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+    var bwWrap = $("#bwChartWrap");
+    if(bwWrap && bw.length){
+      renderLineChart(bwWrap, bw.map(function(b){ return { date: b.date, value: b.weight, unit: b.unit }; }), unit());
+    }
+  }
+
+  /* ---------- line chart (SVG) ---------- */
+  function niceStep(range){
+    var raw = range / 4;
+    var mag = Math.pow(10, Math.floor(Math.log(raw)/Math.LN10));
+    var norm = raw / mag;
+    var step = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+    return step * mag;
+  }
+
+  function renderLineChart(wrap, points, unitLabel){
+    if(!points.length){ wrap.innerHTML = ""; return; }
+    var W = 320, H = 168, padL = 34, padR = 14, padT = 16, padB = 24;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+
+    var values = points.map(function(p){ return p.value; });
+    var minV = Math.min.apply(null, values), maxV = Math.max.apply(null, values);
+    if(minV === maxV){ minV -= 1; maxV += 1; }
+    var step = niceStep(maxV - minV) || 1;
+    var niceMin = Math.floor(minV/step)*step;
+    var niceMax = Math.ceil(maxV/step)*step;
+    if(niceMin === niceMax) niceMax = niceMin + step;
+
+    function xAt(i){ return points.length===1 ? padL + plotW/2 : padL + (i/(points.length-1))*plotW; }
+    function yAt(v){ return padT + plotH - ((v-niceMin)/(niceMax-niceMin))*plotH; }
+
+    var gridLines = [];
+    for(var v=niceMin; v<=niceMax+1e-9; v+=step){ gridLines.push(v); }
+
+    var linePts = points.map(function(p,i){ return xAt(i)+","+yAt(p.value); }).join(" L ");
+    var areaPts = "M "+xAt(0)+","+yAt(points[0].value)+" L "+linePts+" L "+xAt(points.length-1)+","+(padT+plotH)+" L "+xAt(0)+","+(padT+plotH)+" Z";
+
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="'+points.length+' data points">';
+    gridLines.forEach(function(gv){
+      var y = yAt(gv);
+      svg += '<line x1="'+padL+'" y1="'+y+'" x2="'+(W-padR)+'" y2="'+y+'" stroke="var(--line)" stroke-width="1"/>';
+      svg += '<text x="'+(padL-8)+'" y="'+(y+3)+'" font-size="9" fill="var(--ink-faint)" text-anchor="end" font-family="IBM Plex Mono, monospace">'+fmtNum(gv)+'</text>';
+    });
+    [0, points.length-1].forEach(function(i){
+      if(i<0) return;
+      svg += '<text x="'+xAt(i)+'" y="'+(H-6)+'" font-size="9" fill="var(--ink-faint)" text-anchor="'+(i===0?'start':'end')+'" font-family="Work Sans, sans-serif">'+niceDate(points[i].date,"short")+'</text>';
+    });
+    svg += '<path d="'+areaPts+'" fill="var(--accent)" opacity="0.1" stroke="none"/>';
+    svg += '<path d="M '+linePts+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    points.forEach(function(p,i){
+      var x = xAt(i), y = yAt(p.value);
+      var r = p.pr ? 5 : 4;
+      svg += '<circle cx="'+x+'" cy="'+y+'" r="'+(r+2)+'" fill="var(--surface)"/>';
+      svg += '<circle class="chart-pt" data-i="'+i+'" cx="'+x+'" cy="'+y+'" r="'+r+'" fill="var(--accent)"/>';
+      svg += '<circle cx="'+x+'" cy="'+y+'" r="12" fill="transparent" class="chart-hit" data-i="'+i+'" style="cursor:pointer;"/>';
+    });
+    var lastP = points[points.length-1];
+    svg += '<text x="'+xAt(points.length-1)+'" y="'+(yAt(lastP.value)-10)+'" font-size="11" font-weight="700" fill="var(--ink)" text-anchor="end" font-family="IBM Plex Mono, monospace">'+fmtNum(lastP.value)+'</text>';
+    svg += '</svg>';
+    svg += '<div class="chart-tooltip" id="chartTooltip"></div>';
+
+    wrap.innerHTML = svg;
+    var tooltip = $("#chartTooltip", wrap);
+    var svgEl = $("svg", wrap);
+
+    function showTip(i, evt){
+      var p = points[i];
+      var label = niceDate(p.date) + '<br><span class="tt-val">'+fmtNum(p.value)+' '+ (p.unit||unitLabel) + (p.reps? ' × '+p.reps : '') +'</span>';
+      tooltip.innerHTML = label;
+      var pt = svgEl.createSVGPoint();
+      pt.x = xAt(i); pt.y = yAt(p.value);
+      var ctm = svgEl.getScreenCTM();
+      var wrapRect = wrap.getBoundingClientRect();
+      var screenPt = pt.matrixTransform(ctm);
+      var localX = screenPt.x - wrapRect.left;
+      var localY = screenPt.y - wrapRect.top;
+      tooltip.style.left = clamp(localX, 30, wrapRect.width-30) + "px";
+      tooltip.style.top = localY + "px";
+      tooltip.classList.add("show");
+    }
+    function hideTip(){ tooltip.classList.remove("show"); }
+    $all(".chart-hit", wrap).forEach(function(hit){
+      hit.addEventListener("mouseenter", function(){ showTip(parseInt(hit.getAttribute("data-i"),10)); });
+      hit.addEventListener("mouseleave", hideTip);
+      hit.addEventListener("click", function(ev){ ev.stopPropagation(); showTip(parseInt(hit.getAttribute("data-i"),10)); });
+    });
+    wrap.addEventListener("click", function(ev){ if(!ev.target.closest(".chart-hit")) hideTip(); });
+  }
+
+  /* ================= SETTINGS TAB ================= */
+  var clearArmed = false;
+
+  function renderSettings(){
+    var html = '<div class="settings-section">' +
+      '<div class="card">' +
+        '<span class="card-title">Units</span>' +
+        '<div class="segmented">' +
+          '<button type="button" data-unit="kg" aria-pressed="'+(unit()==="kg")+'">Kilograms</button>' +
+          '<button type="button" data-unit="lb" aria-pressed="'+(unit()==="lb")+'">Pounds</button>' +
+        '</div>' +
+        '<p class="settings-note">Changes the default for new entries. Past sets keep the unit you logged them in.</p>' +
+      '</div>' +
+
+      '<div class="card">' +
+        '<span class="card-title">Backup</span>' +
+        '<button class="btn btn-block" id="exportBtn" type="button">Export backup (.json)</button>' +
+        '<label class="btn btn-block" id="importLabel" for="importInput" style="display:flex;">Import backup</label>' +
+        '<input type="file" id="importInput" accept="application/json" hidden>' +
+        '<p class="settings-note">Iron Log runs entirely in your browser and keeps data only on this device. Export regularly, especially before clearing browser data or switching devices.</p>' +
+      '</div>' +
+
+      '<div class="danger-zone">' +
+        '<span class="card-title">Danger zone</span>' +
+        '<button class="btn btn-danger-outline btn-block" id="clearBtn" type="button">'+(clearArmed ? "Tap again to confirm" : "Clear all data")+'</button>' +
+      '</div>' +
+
+      '<p class="settings-note" style="text-align:center;">Iron Log · '+state.sets.length+' set'+(state.sets.length===1?'':'s')+' logged · no accounts, no servers</p>' +
+      '</div>';
+
+    $("#view-settings").innerHTML = html;
+    wireSettingsView();
+  }
+
+  function wireSettingsView(){
+    $all("[data-unit]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        state.settings.unit = btn.getAttribute("data-unit");
+        save();
+        renderSettings();
+      });
+    });
+
+    $("#exportBtn").addEventListener("click", function(){
+      var payload = { app: "iron-log", version: 1, exportedAt: new Date().toISOString(), data: state };
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      saveFile(blob, "iron-log-backup-"+todayStr()+".json");
+    });
+
+    $("#importInput").addEventListener("change", function(){
+      var file = this.files && this.files[0];
+      if(!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        try{
+          var parsed = JSON.parse(reader.result);
+          var incoming = parsed && parsed.data ? parsed.data : parsed;
+          if(!incoming || !Array.isArray(incoming.sets)) throw new Error("bad shape");
+          var existingSetIds = {}; state.sets.forEach(function(s){ existingSetIds[s.id] = true; });
+          var added = 0;
+          incoming.sets.forEach(function(s){
+            if(s && s.id && !existingSetIds[s.id]){ state.sets.push(s); added++; }
+          });
+          var existingBwIds = {}; state.bodyweight.forEach(function(b){ existingBwIds[b.id] = true; });
+          (incoming.bodyweight||[]).forEach(function(b){
+            if(b && b.id && !existingBwIds[b.id]){ state.bodyweight.push(b); }
+          });
+          (incoming.exercises||[]).forEach(function(e){
+            if(state.exercises.indexOf(e) === -1) state.exercises.push(e);
+          });
+          save();
+          toast("Imported "+added+" set(s)");
+          renderSettings();
+        } catch(e){
+          toast("Couldn't read that backup file");
+        }
+      };
+      reader.readAsText(file);
+      this.value = "";
+    });
+
+    $("#clearBtn").addEventListener("click", function(){
+      if(!clearArmed){
+        clearArmed = true;
+        renderSettings();
+        setTimeout(function(){ clearArmed = false; var b=$("#clearBtn"); if(b) b.textContent = "Clear all data"; }, 4000);
+        return;
+      }
+      state = defaultData();
+      save();
+      clearArmed = false;
+      toast("All data cleared");
+      renderSettings();
+    });
+  }
+
+  /* ---------- save-to-device (works in the Artifact viewer and standalone) ---------- */
+  async function saveFile(blob, filename){
+    if(window.claude && typeof window.claude.use === "function"){
+      try{
+        var downloads = await window.claude.use("downloads");
+        if(downloads){
+          var result = await downloads.save({ filename: filename, data: blob });
+          toast(result.status === "saved" ? "Backup saved" : "Backup sent");
+          return;
+        }
+      } catch(err){
+        if(err && err.code === "declined"){ toast("Export cancelled"); return; }
+      }
+    }
+    try{
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      toast("Backup saved");
+    } catch(e){ toast("Couldn't start the download here"); }
+  }
+
+  /* ---------- boot ---------- */
+  renderLog();
+})();
+</script>
+
+</body>
+</html>
